@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Virtual environment
+fraud-detection-env/
+
+# Data (large / regenerable)
+data/raw/
+data/processed/
+
+# Model artifacts
+models/*
+!models/.gitkeep
+
+# OS
+.DS_Store
+Thumbs.db
