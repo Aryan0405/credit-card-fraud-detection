@@ -1,0 +1,2 @@
+model,precision,recall,f1,pr_auc
+logistic_regression_baseline,0.8485,0.5895,0.6957,0.6923
