@@ -5,7 +5,6 @@ __pycache__/
 
 # Virtual environment
 .vscode
-.claude/
 # Data (large / regenerable)
 data/raw/
 data/processed/
