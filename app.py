@@ -1,12 +1,12 @@
-# Day 5 — Streamlit app: transaction fraud probability, threshold slider, SHAP force plot.
+# Day 5 — Streamlit app: transaction fraud probability, threshold slider, SHAP waterfall plot.
 from pathlib import Path
 
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
 import shap
 
 from sklearn.metrics import precision_score, recall_score
-import streamlit.components.v1 as components
 import joblib
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -28,15 +28,14 @@ def load_explainer(_model):
 
 @st.cache_data
 def load_data():
-    data = pd.read_csv(BASE_DIR / "data" / "processed" / "creditcard_dedup.csv", index_col=0)
     X_test = joblib.load(BASE_DIR / "models" / "X_test.pkl")
     fraud_predictions = pd.read_csv(BASE_DIR / "reports" / "fraud_predictions.csv", index_col=0)
-    return data, X_test, fraud_predictions
+    return X_test, fraud_predictions
 
 
 xgb_model = load_model()
 explainer = load_explainer(xgb_model)
-data, X_test, fraud_predictions = load_data()
+X_test, fraud_predictions = load_data()
 
 y_test = fraud_predictions["actual"]
 y_prob = fraud_predictions["predicted_proba"]
@@ -49,12 +48,26 @@ y_prob = fraud_predictions["predicted_proba"]
 st.title("Fraud Detection Dashboard")
 
 
-# Transaction selection — restrict to test-set transactions (the ones we have ground truth for)
-test_data = data.loc[X_test.index]
+# Case type filter — jump straight to a caught fraud, a missed fraud, or a false alarm
+case_type = st.selectbox(
+    "Case Type",
+    ["All", "Fraud (caught) [TP]", "Fraud (missed) [FN]", "False alarm [FP]", "Legit (correct) [TN]"]
+)
+
+if case_type == "Fraud (caught) [TP]":
+    filtered = fraud_predictions[(fraud_predictions["actual"] == 1) & (fraud_predictions["predicted"] == 1)]
+elif case_type == "Fraud (missed) [FN]":
+    filtered = fraud_predictions[(fraud_predictions["actual"] == 1) & (fraud_predictions["predicted"] == 0)]
+elif case_type == "False alarm [FP]":
+    filtered = fraud_predictions[(fraud_predictions["actual"] == 0) & (fraud_predictions["predicted"] == 1)]
+elif case_type == "Legit (correct) [TN]":
+    filtered = fraud_predictions[(fraud_predictions["actual"] == 0) & (fraud_predictions["predicted"] == 0)]
+else:
+    filtered = fraud_predictions
 
 transaction_id = st.selectbox(
     "Select Transaction",
-    test_data.index
+    filtered.index
 )
 
 
@@ -132,13 +145,7 @@ st.subheader("Why did the model make this prediction?")
 
 shap_values = explainer(selected_X)
 
-shap_plot = shap.force_plot(
-    explainer.expected_value,
-    shap_values.values[0],
-    selected_X.iloc[0]
-)
-
-components.html(
-    shap.getjs() + shap_plot.html(),
-    height=300
-)
+fig = plt.figure()
+shap.plots.waterfall(shap_values[0], show=False)
+st.pyplot(fig)
+plt.close(fig)
