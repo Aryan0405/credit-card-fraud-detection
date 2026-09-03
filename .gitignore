@@ -12,6 +12,8 @@ data/processed/
 # Model artifacts
 models/*
 !models/.gitkeep
+!models/xgb_model.pkl
+!models/X_test.pkl
 
 # OS
 .DS_Store
