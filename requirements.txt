@@ -1,3 +1,4 @@
+streamlit
 pandas
 numpy<2.3
 scipy<1.15
@@ -5,8 +6,5 @@ scikit-learn
 xgboost
 imbalanced-learn
 shap
-streamlit
 matplotlib
 seaborn
-jupyter
-ipykernel
