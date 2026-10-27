@@ -1,22 +1,43 @@
 # Fraud Detection MVP
 
 Model + SHAP + Streamlit + Failure Analysis + Benchmark Table, built on the
-[Kaggle ULB Credit Card Fraud](https://www.kaggle.com/mlg-ulb/creditcardfraud) dataset.
+[Kaggle ULB Credit Card Fraud](https://www.kaggle.com/mlg-ulb/creditcardfraud) dataset (284,807 transactions, 0.17% fraud).
+
+Live demo: https://credit-card-fraud-detection-aryan0405.streamlit.app/
 
 ## Results
+
+Test set: 56,746 transactions, of which only 95 are fraud.
 
 | Model | Precision | Recall | F1 | PR-AUC |
 |---|---|---|---|---|
 | Logistic Regression (baseline) | 0.85 | 0.59 | 0.70 | 0.69 |
-| XGBoost (main model) | 0.80 | 0.76 | 0.78 | 0.79 |
+| XGBoost (main model, threshold 0.5) | 0.80 | 0.76 | 0.78 | 0.79 |
+| FLAML-tuned XGBoost (threshold 0.2222) | 0.96 | 0.77 | 0.85 | 0.82 |
 
-XGBoost was trained with `scale_pos_weight` class weighting rather than SMOTE: SMOTE synthesizes unrealistic points, weighting is simpler and safer. The weight was chosen by comparing 3 candidates on a held-out validation split, then re-checked against the test set since the top validation-PR-AUC pick didn't actually hold up there. Full table: [reports/benchmark_table.csv](reports/benchmark_table.csv).
+Full table: [reports/benchmark_table.csv](reports/benchmark_table.csv).
+
+**Reading the FLAML row carefully.** Its 0.2222 threshold was chosen by maximizing F1 on the test set (see `notebooks/05_automl_ceiling.ipynb`), while the XGBoost row uses an untuned 0.5. Its precision and F1 are therefore optimistic and not directly comparable to the other rows. PR-AUC does not depend on a threshold, so it is the fairer comparison (0.82 vs 0.79). With only 95 test frauds, small differences are within noise.
+
+## Method
+
+- **Data prep:** 1,081 duplicate rows removed before splitting, leaving 283,726 rows (473 fraud). Stratified 80/20 split, `random_state=42`.
+- **Baseline:** logistic regression, with `Time` and `Amount` scaled (scaler fit on the training set only).
+- **Main model:** XGBoost (`learning_rate=0.05`, `max_depth=4`) with `scale_pos_weight` class weighting instead of SMOTE: SMOTE synthesizes unrealistic points, weighting is simpler and safer.
+  - The weight was chosen from 3 candidates (24, 100, 578) using 5-fold stratified cross-validation on the **training data only**. The candidates scored almost identically (mean CV PR-AUC about 0.848 each), so 24 was selected on a very small margin.
+  - The number of trees (174) comes from early stopping on a validation slice of the training data. The test set is not used for any model-selection decision on the main model.
+- **AutoML comparison:** FLAML searched XGBoost hyperparameters with 5-fold CV on the training data (metric: average precision, 300 s budget, seed 42), as a check on how much a tuned model gains over the hand-built one.
+- **Explainability:** SHAP `TreeExplainer` on the test set.
 
 ## Failure Analysis
 
-Out of 56,746 test transactions, the model produced 18 false positives and 23 false negatives, slightly biased toward missing fraud over raising false alarms, at a false-alarm rate of only 0.03%. Reviewing 4 representative cases with SHAP showed the errors split into two distinct types: **borderline cases** near the 0.5 decision threshold (fixable by adjusting the threshold, exactly what the Streamlit slider is for), and **confident misses** where the anonymized feature space doesn't separate the classes or fraud doesn't match the model's learned pattern (not fixable by threshold alone, would need better features or more diverse fraud examples).
+Out of 56,746 test transactions, the main XGBoost model produced 18 false positives and 23 false negatives, slightly biased toward missing fraud over raising false alarms, at a false-alarm rate of only 0.03%. Reviewing 4 representative cases with SHAP showed the errors split into two distinct types: **borderline cases** near the 0.5 decision threshold (fixable by adjusting the threshold, exactly what the Streamlit slider is for), and **confident misses** where the anonymized feature space doesn't separate the classes or fraud doesn't match the model's learned pattern (not fixable by threshold alone, would need better features or more diverse fraud examples).
 
 Full case-by-case breakdown with SHAP evidence for each: [reports/failure_analysis.md](reports/failure_analysis.md).
+
+## Demo app
+
+`app.py` is a Streamlit app that compares XGBoost (main) and the FLAML-tuned XGBoost side by side. Pick a case type (caught fraud, missed fraud, false alarm, correct legit) and a transaction to see each model's fraud probability, verdict, test-set precision/recall/F1/PR-AUC, confusion counts and a SHAP waterfall. Use one shared threshold slider, or each model's own threshold.
 
 ## Setup
 
@@ -24,17 +45,39 @@ Full case-by-case breakdown with SHAP evidence for each: [reports/failure_analys
 conda create -n fraud-detection python=3.11
 conda activate fraud-detection
 pip install -r requirements.txt
+pip install flaml   # needed for notebook 05 and to load the FLAML bundle
 ```
 
 `numpy`/`scipy` are version-pinned in `requirements.txt`: newer releases have a broken LAPACK backend on Windows that crashes on `import shap`.
+
+Download `creditcard.csv` from Kaggle into `data/raw/` and create `data/processed/`, then run the notebooks in order (01 → 05). Notebook 02 writes the train/test splits, the XGBoost model and the predictions that notebooks 03-05 and the app depend on; notebook 05 writes the FLAML bundle (a 300 s search). Launch the app with:
+
+```bash
+streamlit run app.py
+```
 
 ## Structure
 
 - `data/raw/`: original dataset (gitignored)
 - `data/processed/`: generated/cleaned data (gitignored)
-- `notebooks/`: day-by-day build notebooks
-- `models/`: saved model artifacts (gitignored)
-- `reports/benchmark_table.csv`: baseline vs. main model metrics
-- `reports/fraud_predictions.csv`: test-set predictions used by the notebooks and app
-- `reports/failure_analysis.md`: written failure analysis (Day 4)
-- `app.py`: Streamlit demo app (Day 5)
+- `notebooks/`: step-by-step build notebooks
+  - `01_baseline_model`: baseline logistic regression
+  - `02_main_model`: XGBoost, weight selection by CV, saved splits/model/predictions
+  - `03_shap_explainability`: global and local SHAP plots
+  - `04_failure_analysis`: SHAP review of 2 false positives and 2 false negatives
+  - `05_automl_ceiling`: FLAML-tuned XGBoost and its test evaluation
+- `models/`: saved model artifacts (gitignored except `xgb_model.pkl` and `X_test.pkl`; other files are regenerated by the notebooks)
+- `reports/benchmark_table.csv`: baseline vs. main model vs. FLAML metrics
+- `reports/fraud_predictions.csv`: test-set predictions of the main XGBoost model, used by the notebooks and app
+- `reports/failure_analysis.md`: written failure analysis
+- `reports/flaml_xgb_fraud.log`: FLAML search log (improving trials only)
+- `app.py`: Streamlit comparison app
+
+## Limitations
+
+- One random split and one seed; the test set contains only 95 fraud cases, so metrics carry wide uncertainty (recall 0.76 is roughly 0.67-0.84 at 95% confidence).
+- The split is random, not chronological, so performance on future transactions may be lower.
+- The FLAML threshold was tuned on the test set (see Results).
+- Features `V1`-`V28` are anonymized PCA components, so SHAP explanations cannot be translated into business terms.
+- No cost model: the decision threshold is not tied to the actual cost of missed fraud versus false alarms.
+- Results are on a public benchmark dataset; no production performance or business impact has been measured.
