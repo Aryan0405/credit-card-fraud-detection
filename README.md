@@ -17,7 +17,7 @@ Test set: 56,746 transactions, of which only 95 are fraud.
 
 Full table: [reports/benchmark_table.csv](reports/benchmark_table.csv).
 
-**Reading the FLAML row carefully.** Its 0.2222 threshold was chosen by maximizing F1 on the test set (see `notebooks/05_automl_ceiling.ipynb`), while the XGBoost row uses an untuned 0.5. Its precision and F1 are therefore optimistic and not directly comparable to the other rows. PR-AUC does not depend on a threshold, so it is the fairer comparison (0.82 vs 0.79). With only 95 test frauds, small differences are within noise.
+**Reading the FLAML row carefully.** Its 0.2222 threshold was chosen by maximizing F1 on the test set (see `notebooks/05_automl_ceiling.ipynb`), a procedure that should be avoided. In practice it changes little: FLAML's F1 is 0.85 at every threshold from 0.2 to 0.7 (at the default 0.5: precision 0.99, recall 0.75), versus 0.78 for the main XGBoost at 0.5. The FLAML advantage therefore appears real on this split, but with only 95 test frauds it is uncertain (paired bootstrap of the PR-AUC difference: about +0.03, 95% interval roughly 0.00 to 0.06).
 
 ## Method
 
@@ -77,7 +77,7 @@ streamlit run app.py
 
 - One random split and one seed; the test set contains only 95 fraud cases, so metrics carry wide uncertainty (recall 0.76 is roughly 0.67-0.84 at 95% confidence).
 - The split is random, not chronological, so performance on future transactions may be lower.
-- The FLAML threshold was tuned on the test set (see Results).
+- The FLAML threshold was tuned on the test set (see Results); the main model's scores are class-weighted, so they are risk scores rather than calibrated probabilities.
 - Features `V1`-`V28` are anonymized PCA components, so SHAP explanations cannot be translated into business terms.
 - No cost model: the decision threshold is not tied to the actual cost of missed fraud versus false alarms.
 - Results are on a public benchmark dataset; no production performance or business impact has been measured.
