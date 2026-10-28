@@ -145,7 +145,7 @@ def render_panel(name):
 
     st.subheader(name)
     st.metric("Risk Score", f"{score:.3f}")
-    if prob >= thr:
+    if score >= thr:
         st.error(f"FRAUD (threshold {thr:.2f})")
     else:
         st.success(f"NOT FRAUD (threshold {thr:.2f})")
