@@ -122,7 +122,7 @@ threshold_mode = st.radio(
 )
 
 if threshold_mode.startswith("Same"):
-    t = st.slider("Fraud Threshold", 0.0, 1.0, 0.5, 0.01)
+    t = st.slider("Risk Score Threshold", 0.0, 1.0, 0.5, 0.01)
     thresholds = {LEFT: t, RIGHT: t}
 else:
     thresholds = {LEFT: 0.5, RIGHT: automl_threshold}
@@ -141,10 +141,10 @@ st.divider()
 # --------------------------------
 def render_panel(name):
     thr = thresholds[name]
-    prob = float(probas[name].loc[transaction_id])
+    score = float(probas[name].loc[transaction_id])
 
     st.subheader(name)
-    st.metric("Fraud Probability", f"{prob:.2%}")
+    st.metric("Risk Score", f"{score:.3f}")
     if prob >= thr:
         st.error(f"FRAUD (threshold {thr:.2f})")
     else:
